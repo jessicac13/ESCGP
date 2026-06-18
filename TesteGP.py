@@ -53,7 +53,7 @@ if st.session_state.tela == 'selecao':
         nome_coluna_cliente = df_limpo.columns[0]
         
         # Cria uma linha para o "Ver Todos" com a mesma estrutura de colunas
-        linha_geral = pd.DataFrame({nome_coluna_cliente: ["Todos os Clientes (Geral)"]})
+        
         
         # Junta a opção geral no topo da lista de clientes cadastrados
         df_exibicao = pd.concat([linha_geral, df_limpo], ignore_index=True)
