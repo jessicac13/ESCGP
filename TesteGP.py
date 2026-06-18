@@ -7,7 +7,7 @@ import plotly.express as px
 # ==========================================
 st.set_page_config(page_title="Dashboard Google Sheets", layout="wide")
 
-st.title(":blue[Análise de GPs, Clientes e Ordens de Serviço]")
+st.title(":red[Análise de GPs, Clientes e Ordens de Serviço]")
 
 # Inicializa o estado da página caso não exista
 if 'pagina' not in st.session_state:
