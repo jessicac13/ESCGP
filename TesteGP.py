@@ -20,7 +20,7 @@ ID_PLANILHA_CLIENTES = '1jQkoDfW438MtuGaTsoBrO_sNk-oj2Zwp0UXeBohJeCg'
 ID_PLANILHA_OS = '1u9TH6RpD8F9-ImM5KR8dknCmxvs0_QjD' 
 
 # Lista manual de GPs (conforme seu código original)
-lista_gps = ["Fausto", "MauricioOrtiga", "MauricioFavero", "Cristiane", "Nasare", "Jhonanthan"] 
+lista_gps = ["Fausto", "MauricioOrtiga", "MauricioFavero", "Cristiane", "Jaciara","Nasare", "Jhonanthan"] 
 
 # ==========================================
 # FUNÇÕES DE CARREGAMENTO DE DADOS (COM CACHE)
