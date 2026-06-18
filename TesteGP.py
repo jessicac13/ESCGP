@@ -7,7 +7,7 @@ import plotly.express as px
 # ==========================================
 st.set_page_config(page_title="Dashboard Google Sheets", layout="wide")
 
-st.title(":blue[Gestão de GPs X Clientes e Ordens de Serviço (via Google Sheets)]")
+st.title(":blue[Análise de GPs, Clientes e Ordens de Serviço]")
 
 # ==========================================
 # CONFIGURAÇÃO DOS IDs DAS PLANILHAS
@@ -16,7 +16,7 @@ ID_PLANILHA_CLIENTES = '1jQkoDfW438MtuGaTsoBrO_sNk-oj2Zwp0UXeBohJeCg'
 ID_PLANILHA_OS = '1u9TH6RpD8F9-ImM5KR8dknCmxvs0_QjD' 
 
 # Lista manual de GPs (Corrigido o espaçamento em "Jaciara", "Nasare")
-lista_gps = ["Fausto", "MauricioOrtiga", "MauricioFavero", "Cristiane", "Jaciara", "Nasare", "Jhonanthan"] 
+lista_gps = ["Fausto", "Mauricio_Ortiga", "Mauricio_Favero", "Cristiane", "Jaciara", "Nasare", "Jhonanthan"] 
 
 # ==========================================
 # FUNÇÕES DE CARREGAMENTO DE DADOS (COM CACHE)
