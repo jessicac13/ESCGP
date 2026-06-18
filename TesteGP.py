@@ -89,45 +89,49 @@ try:
     if len(df_os_final) > 0:
         
         if cliente_selecionado == "Todos os Clientes (Geral)":
-            # Agrupa a quantidade de OS por cliente para validar a regra de 100+
-            df_volumetria = df_os_final.groupby([col_cliente]).size().reset_index(name='Quantidade').sort_values(by='Quantidade', ascending=False)
-            qtd_clientes_com_os = len(df_volumetria)
-
+            # Agrupa e ordena os clientes pela quantidade de OS (Maior para Menor)
+            df_volumetria = df_os_final.groupby(col_cliente).size().reset_index(name='Quantidade')
+            df_volumetria = df_volumetria.sort_values(by='Quantidade', ascending=False)
+            
             graf1, graf2 = st.columns(2)
 
             with graf1:
-                # SE TIVER MAIS DE 100 CLIENTES: Gráfico de barras horizontais com Scroll + Pizza Top 10
-                if qtd_clientes_com_os > 100:
-                    st.markdown("#### Volumetria de OS por Cliente (Mais de 100 clientes)")
-                    
-                    # Barras horizontais com barra de rolagem (sliders)
-                    fig_barras_clientes = px.bar(df_volumetria, x='Quantidade', y=col_cliente, 
-                                                 orientation='h', title="Total de OS por Cliente (Use o scroll abaixo)",
-                                                 labels={col_cliente: 'Cliente', 'Quantidade': 'Total de OS'})
-                    
-                    # Ativa o slider/scroll vertical no gráfico
-                    fig_barras_clientes.update_layout(
-                        yaxis=dict(autorange="reversed"),
-                        xaxis_rangeslider_visible=True,
-                        height=600
-                    )
-                    st.plotly_chart(fig_barras_clientes, use_container_width=True)
-                    
-                    # Sub-gráfico de Pizza apenas com o Top 10
-                    st.markdown("#### Top 10 Clientes com Mais OS")
-                    df_top10 = df_volumetria.head(10)
-                    fig_pizza_top = px.pie(df_top10, values='Quantidade', names=col_cliente, title="Top 10 Clientes")
-                    fig_pizza_top.update_traces(textinfo='percent+value', textposition='inside')
-                    st.plotly_chart(fig_pizza_top, use_container_width=True)
-
-                # SE TIVER 100 OU MENOS: Mantém o comportamento original da Pizza completa
-                else:
-                    st.markdown("#### Volumetria de OS por Cliente")
-                    fig_pizza = px.pie(df_os_final, names=col_cliente, title="Distribuição de OS por Cliente")
-                    fig_pizza.update_traces(textinfo='percent+value', textposition='inside')
-                    st.plotly_chart(fig_pizza, use_container_width=True)
+                # 1. GRÁFICO DE PIZZA: Mostra SEMPRE apenas o Top 10 para não poluir
+                st.markdown("#### Top 10 Clientes com Maior Volume de OS")
+                df_top10 = df_volumetria.head(10)
+                fig_pizza_top = px.pie(df_top10, values='Quantidade', names=col_cliente, 
+                                       title="Os 10 maiores clientes em volume de OS")
+                fig_pizza_top.update_traces(textinfo='percent+value', textposition='inside')
+                st.plotly_chart(fig_pizza_top, use_container_width=True)
+                
+                st.write("---")
+                
+                # 2. GRÁFICO DE BARRAS: Mostra a lista completa (com scroll vertical automático se for grande)
+                st.markdown("#### Volumetria Completa por Cliente")
+                
+                # Inverte a ordem para as barras maiores ficarem no topo do gráfico horizontal
+                df_barras_completo = df_volumetria.sort_values(by='Quantidade', ascending=True)
+                
+                fig_barras_clientes = px.bar(
+                    df_barras_completo, 
+                    x='Quantidade', 
+                    y=col_cliente, 
+                    orientation='h',
+                    title="Distribuição Geral de todas as OS por Cliente",
+                    text='Quantidade'
+                )
+                
+                # Ajusta a altura dinamicamente baseado no número de clientes para criar o scroll na tela
+                altura_dinamica = max(400, len(df_barras_completo) * 25)
+                fig_barras_clientes.update_layout(
+                    height=altura_dinamica, 
+                    yaxis={'type': 'category'}
+                )
+                fig_barras_clientes.update_traces(textposition='outside')
+                st.plotly_chart(fig_barras_clientes, use_container_width=True)
 
             with graf2:
+                # Mantém o seu gráfico original de Status do lado direito
                 st.markdown("#### Status Geral das Ordens de Serviço")
                 df_barras = df_os_final.groupby([col_status]).size().reset_index(name='Quantidade')
                 fig_barras = px.bar(df_barras, x=col_status, y='Quantidade', 
@@ -137,7 +141,6 @@ try:
                                     text='Quantidade')
                 fig_barras.update_traces(textposition='outside')
                 st.plotly_chart(fig_barras, use_container_width=True)
-        
         else:
             # Modo Específico (Filtro de cliente único)
             st.markdown(f"#### Status das Ordens de Serviço — {cliente_selecionado}")
