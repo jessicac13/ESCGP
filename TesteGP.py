@@ -7,7 +7,7 @@ import plotly.express as px
 # ==========================================
 st.set_page_config(page_title="Dashboard Google Sheets", layout="wide")
 
-st.title("Gestão de GPs X Clientes e Ordens de Serviço (via Google Sheets)")
+st.title(":blue[Gestão de GPs X Clientes e Ordens de Serviço (via Google Sheets)]")
 #st.markdown("Conectado em tempo real com as suas Google Planilhas.")
 
 # ==========================================
