@@ -9,10 +9,6 @@ st.set_page_config(page_title="Dashboard Google Sheets", layout="wide")
 
 st.title(":red[Análise de GPs, Clientes e Ordens de Serviço]")
 
-# Inicializa o estado da página caso não exista
-if 'pagina' not in st.session_state:
-    st.session_state.pagina = 'filtros'
-
 # ==========================================
 # CONFIGURAÇÃO DOS IDs DAS PLANILHAS
 # ==========================================
@@ -37,58 +33,37 @@ def carregar_dados_os(id_planilha):
     return df
 
 # ==========================================
-# TELA 1: SELEÇÃO DE FILTROS
+# SELEÇÃO DO GP (PASSO 1)
 # ==========================================
-if st.session_state.pagina == 'filtros':
-    st.markdown("### Configuração dos Filtros")
-    st.write("Selecione o GP e o Cliente desejado para gerar os relatórios de Ordens de Serviço.")
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        gp_selecionado = st.selectbox("Selecione o Gerente de Projeto (GP):", lista_gps)
-    
-    try:
-        df_clientes = carregar_dados_gp(ID_PLANILHA_CLIENTES, gp_selecionado)
-        lista_clientes_do_gp = df_clientes.iloc[:, 0].dropna().unique()
-        
-        with c2:
-            opcoes_clientes = ["Todos os Clientes (Geral)"] + sorted(list(lista_clientes_do_gp))
-            cliente_selecionado = st.selectbox("Selecione o Cliente para análise de OS:", opcoes_clientes)
-        
-        st.write("")
-        if st.button("Gerar e Ver Gráficos", type="primary", use_container_width=True):
-            st.session_state.gp_escolhido = gp_selecionado
-            st.session_state.cliente_escolhido = cliente_selecionado
-            st.session_state.pagina = 'graficos'
-            st.rerun()
+gp_selecionado = st.selectbox("Selecione o Gerente de Projeto (GP):", lista_gps)
 
-    except Exception as e:
-        st.error(f"Erro ao carregar dados dos filtros: {e}")
-
-# ==========================================
-# TELA 2: VISUALIZAÇÃO DOS GRÁFICOS
-# ==========================================
-elif st.session_state.pagina == 'graficos':
-    gp_selecionado = st.session_state.gp_escolhido
-    cliente_selecionado = st.session_state.cliente_escolhido
+try:
+    # Carrega dados iniciais do GP selecionado
+    df_clientes = carregar_dados_gp(ID_PLANILHA_CLIENTES, gp_selecionado)
+    df_os = carregar_dados_os(ID_PLANILHA_OS)
     
-    head1, head2 = st.columns([5, 1])
-    with head1:
-        st.subheader(f"Dashboard: {gp_selecionado} -> {cliente_selecionado}")
-    with head2:
-        if st.button("Mudar Filtros", use_container_width=True):
-            st.session_state.pagina = 'filtros'
-            st.rerun()
+    col_cliente = 'nomecliente' if 'nomecliente' in df_os.columns else df_os.columns[1]
+    col_status = 'status' if 'status' in df_os.columns else df_os.columns[7]
+    
+    lista_clientes_do_gp = df_clientes.iloc[:, 0].dropna().unique()
+    lista_clientes_limpa = [str(c).strip().lower() for c in lista_clientes_do_gp]
+    
+    # Exibe a lista de clientes cadastrados desse GP para o usuário ver primeiro
+    st.write("---")
+    st.subheader(f"Carteira de Clientes Cadastrados: {gp_selecionado}")
+    df_exibicao = df_clientes.iloc[:, [0]].dropna()
+    st.dataframe(df_exibicao, use_container_width=True)
 
-    try:
-        df_clientes = carregar_dados_gp(ID_PLANILHA_CLIENTES, gp_selecionado)
-        df_os = carregar_dados_os(ID_PLANILHA_OS)
-        
-        col_cliente = 'nomecliente' if 'nomecliente' in df_os.columns else df_os.columns[1]
-        col_status = 'status' if 'status' in df_os.columns else df_os.columns[7]
-        
-        lista_clientes_do_gp = df_clientes.iloc[:, 0].dropna().unique()
-        lista_clientes_limpa = [str(c).strip().lower() for c in lista_clientes_do_gp]
+    # ==========================================
+    # SELEÇÃO DO CLIENTE DA LISTA (PASSO 2)
+    # ==========================================
+    st.write("---")
+    st.subheader("Visualização Detalhada")
+    opcoes_clientes = ["Selecione um cliente para abrir os gráficos...", "Todos os Clientes (Geral)"] + sorted(list(lista_clientes_do_gp))
+    cliente_selecionado = st.selectbox("Escolha o cliente para exibir a análise de OS:", opcoes_clientes)
+
+    # Só processa e mostra gráficos se um cliente válido for selecionado
+    if cliente_selecionado != "Selecione um cliente para abrir os gráficos...":
         
         def cliente_pertence_ao_gp(nome_os):
             if pd.isna(nome_os):
@@ -110,13 +85,12 @@ elif st.session_state.pagina == 'graficos':
                 df_os_filtrado_gp[col_cliente].astype(str).str.strip().str.lower().apply(lambda x: x in nome_sel_limpo)
             ]
 
+        # Métricas do cliente selecionado
         col1, col2 = st.columns(2)
         with col1:
             st.metric(label="Total de Clientes do GP", value=len(df_clientes))
         with col2:
             st.metric(label=f"Total de OS Relacionadas ({cliente_selecionado})", value=len(df_os_final))
-
-        st.write("---")
 
         if len(df_os_final) > 0:
             if cliente_selecionado == "Todos os Clientes (Geral)":
@@ -126,6 +100,7 @@ elif st.session_state.pagina == 'graficos':
                 graf1, graf2 = st.columns(2)
 
                 with graf1:
+                    st.markdown("#### Top 10 Clientes com Maior Volume de OS")
                     df_top10 = df_volumetria.head(10)
                     fig_pizza_top = px.pie(df_top10, values='Quantidade', names=col_cliente, 
                                            title="Clientes em volume de OS")
@@ -134,7 +109,7 @@ elif st.session_state.pagina == 'graficos':
                     
                     st.write("---")
                     
-                    
+                    st.markdown("#### Volumetria Completa por Cliente")
                     df_barras_completo = df_volumetria.sort_values(by='Quantidade', ascending=True)
                     
                     fig_barras_clientes = px.bar(
@@ -155,6 +130,7 @@ elif st.session_state.pagina == 'graficos':
                     st.plotly_chart(fig_barras_clientes, use_container_width=True)
 
                 with graf2:
+                    st.markdown("#### Status Geral das Ordens de Serviço")
                     df_barras = df_os_final.groupby([col_status]).size().reset_index(name='Quantidade')
                     fig_barras = px.bar(df_barras, x=col_status, y='Quantidade', 
                                         title="Quantidade de OS por Status",
@@ -164,6 +140,7 @@ elif st.session_state.pagina == 'graficos':
                     fig_barras.update_traces(textposition='outside')
                     st.plotly_chart(fig_barras, use_container_width=True)
             else:
+                # Modo Individual
                 st.markdown(f"#### Status das Ordens de Serviço — {cliente_selecionado}")
                 df_barras = df_os_final.groupby([col_status]).size().reset_index(name='Quantidade')
                 fig_barras = px.bar(df_barras, x=col_status, y='Quantidade', 
@@ -176,11 +153,8 @@ elif st.session_state.pagina == 'graficos':
                           
         else:
             st.info("Nenhuma Ordem de Serviço encontrada para as condições selecionadas.")
+    else:
+        st.info("Por favor, selecione um cliente ou a opção 'Todos os Clientes (Geral)' para renderizar os gráficos correspondentes.")
 
-        st.write("---")
-        st.write("### Listagem de Clientes do GP")
-        df_exibicao = df_clientes.iloc[:, [0]].dropna()
-        st.dataframe(df_exibicao, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"Erro ao processar os dados: {e}")
+except Exception as e:
+    st.error(f"Erro ao processar os dados: {e}")
