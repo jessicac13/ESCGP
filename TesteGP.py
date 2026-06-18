@@ -126,7 +126,6 @@ elif st.session_state.pagina == 'graficos':
                 graf1, graf2 = st.columns(2)
 
                 with graf1:
-                    st.markdown("#### Top 10 Clientes com Maior Volume de OS")
                     df_top10 = df_volumetria.head(10)
                     fig_pizza_top = px.pie(df_top10, values='Quantidade', names=col_cliente, 
                                            title="Os 10 maiores clientes em volume de OS")
@@ -169,7 +168,6 @@ elif st.session_state.pagina == 'graficos':
                 st.markdown(f"#### Status das Ordens de Serviço — {cliente_selecionado}")
                 df_barras = df_os_final.groupby([col_status]).size().reset_index(name='Quantidade')
                 fig_barras = px.bar(df_barras, x=col_status, y='Quantidade', 
-                                    title=f"Quantidade de OS por Status para {cliente_selecionado}",
                                     labels={col_status: 'Status', 'Quantidade': 'Total de OS'},
                                     color=col_status,
                                     text='Quantidade')
@@ -186,4 +184,3 @@ elif st.session_state.pagina == 'graficos':
 
     except Exception as e:
         st.error(f"Erro ao processar os dados: {e}")
-
