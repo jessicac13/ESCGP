@@ -26,7 +26,7 @@ def buscar_nomes_abas(url):
 # Para simplificar e não precisar de senhas/credenciais complexas do Google Cloud,
 # o jeito mais prático é você listar os nomes dos seus GPs manualmente em uma lista aqui no código,
 # OU colocar o nome exato das abas nesta lista abaixo:
-lista_gps = ["Fausto", "Mauricio Ortiga", "Mauricio Favero", "Cristiane", "Cristiane", "Nasare", "Jhonanthan"] 
+lista_gps = ["Fausto", "MauricioOrtiga", "MauricioFavero", "Cristiane", "Cristiane", "Nasare", "Jhonanthan"] 
 
 # Se você preferir que o Python descubra as abas sozinho sem você digitar,
 # o ideal é usar a API oficial do Google (com arquivo de chave .json).
