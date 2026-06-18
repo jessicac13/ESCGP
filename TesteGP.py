@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import re
 
 # ==========================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -37,15 +36,6 @@ def carregar_dados_os(id_planilha):
     df.columns = df.columns.str.strip()
     return df
 
-# Função para unificar nomes (ex: "TIM EM PR" -> "TIM")
-def simplificar_nome_cliente(nome):
-    if pd.isna(nome):
-        return "Não Informado"
-    nome_str = str(nome).strip()
-    # Corta o nome antes de " EM ", " - " ou pega a primeira palavra se for muito longa
-    nome_simplificado = re.split(r'(?i)\s+em\s+|\s+-\s+|\s+LTDA', nome_str)[0]
-    return nome_simplificado.strip().upper()
-
 # ==========================================
 # FLUXO TELA 1: SELEÇÃO MÚLTIPLA NA TABELA
 # ==========================================
@@ -58,12 +48,17 @@ if st.session_state.tela == 'selecao':
         st.write("---")
         st.subheader("Selecione um ou mais clientes na tabela abaixo:")
         
+        # Isola a primeira coluna e limpa linhas vazias
         df_limpo = df_clientes.iloc[:, [0]].dropna()
         nome_coluna_cliente = df_limpo.columns[0]
         
+        # Cria uma linha para o "Ver Todos" com a mesma estrutura de colunas
         linha_geral = pd.DataFrame({nome_coluna_cliente: ["Todos os Clientes (Geral)"]})
+        
+        # Junta a opção geral no topo da lista de clientes cadastrados
         df_exibicao = pd.concat([linha_geral, df_limpo], ignore_index=True)
 
+        # Tabela interativa com seleção múltipla ativa (multi-row)
         selecao_tabela = st.dataframe(
             df_exibicao, 
             use_container_width=True,
@@ -71,14 +66,17 @@ if st.session_state.tela == 'selecao':
             selection_mode="multi-row"
         )
 
+        # Processa as linhas que estão marcadas no momento
         if selecao_tabela and selecao_tabela["selection"]["rows"]:
             linhas_selecionadas = selecao_tabela["selection"]["rows"]
             clientes_escolhidos = df_exibicao.iloc[linhas_selecionadas, 0].tolist()
             
             st.write(f"Clientes selecionados: {', '.join(clientes_escolhidos)}")
             
+            # Botão para confirmar o envio após marcar tudo o que quer
             if st.button("Gerar Gráficos dos Selecionados", type="primary", use_container_width=True):
                 st.session_state.gp_atual = gp_selecionado
+                # Se "Todos os Clientes (Geral)" estiver no meio da seleção, considera visão geral completa
                 if "Todos os Clientes (Geral)" in clientes_escolhidos:
                     st.session_state.cliente_atual = ["Todos os Clientes (Geral)"]
                 else:
@@ -99,6 +97,7 @@ elif st.session_state.tela == 'graficos':
     gp_selecionado = st.session_state.gp_atual
     clientes_selecionados = st.session_state.cliente_atual
 
+    # Define o texto do cabeçalho baseado na quantidade de clientes
     if len(clientes_selecionados) == 1:
         texto_dashboard = clientes_selecionados[0]
     else:
@@ -133,10 +132,12 @@ elif st.session_state.tela == 'graficos':
 
         df_os_filtrado_gp = df_os[df_os[col_cliente].apply(cliente_pertence_ao_gp)]
 
+        # Lógica de Filtro Final para múltiplos clientes
         if "Todos os Clientes (Geral)" in clientes_selecionados:
             df_os_final = df_os_filtrado_gp
             modo_geral = True
         else:
+            # Filtra todas as OS que coincidam com qualquer um dos clientes selecionados
             mascaras = []
             for cli in clientes_selecionados:
                 nome_sel_limpo = str(cli).strip().lower()
@@ -144,11 +145,9 @@ elif st.session_state.tela == 'graficos':
                     df_os_filtrado_gp[col_cliente].astype(str).str.strip().str.lower().str.contains(nome_sel_limpo) |
                     df_os_filtrado_gp[col_cliente].astype(str).str.strip().str.lower().apply(lambda x: x in nome_sel_limpo)
                 )
-            df_os_final = df_os_filtrado_gp[pd.concat(mascaras, axis=1).any(axis=1)].copy()
+            # Une as máscaras de filtros usando o operador lógico OR (|)
+            df_os_final = df_os_filtrado_gp[pd.concat(mascaras, axis=1).any(axis=1)]
             modo_geral = len(clientes_selecionados) > 1
-
-        # CRUCIAL: Aplica a simplificação de nomes para unificar filiais/estados nos gráficos
-        df_os_final['Cliente_Grupo'] = df_os_final[col_cliente].apply(simplificar_nome_cliente)
 
         col1, col2 = st.columns(2)
         with col1:
@@ -160,31 +159,30 @@ elif st.session_state.tela == 'graficos':
 
         if len(df_os_final) > 0:
             if modo_geral:
-                # Agrupamento agora utiliza a coluna unificada 'Cliente_Grupo'
-                df_volumetria = df_os_final.groupby('Cliente_Grupo').size().reset_index(name='Quantidade')
+                df_volumetria = df_os_final.groupby(col_cliente).size().reset_index(name='Quantidade')
                 df_volumetria = df_volumetria.sort_values(by='Quantidade', ascending=False)
                 
                 graf1, graf2 = st.columns(2)
 
                 with graf1:
-                    st.markdown("#### Top 10 Clientes com Maior Volume de OS (Unificados)")
+                    
                     df_top10 = df_volumetria.head(10)
-                    fig_pizza_top = px.pie(df_top10, values='Quantidade', names='Cliente_Grupo', 
-                                           title="Clientes com nomes unificados")
+                    fig_pizza_top = px.pie(df_top10, values='Quantidade', names=col_cliente, 
+                                           title="Clientes em volume de OS")
                     fig_pizza_top.update_traces(textinfo='percent+value', textposition='inside')
                     st.plotly_chart(fig_pizza_top, use_container_width=True)
                     
                     st.write("---")
                     
-                    st.markdown("#### Volumetria Completa por Cliente (Unificados)")
+                    
                     df_barras_completo = df_volumetria.sort_values(by='Quantidade', ascending=True)
                     
                     fig_barras_clientes = px.bar(
                         df_barras_completo, 
                         x='Quantidade', 
-                        y='Cliente_Grupo', 
+                        y=col_cliente, 
                         orientation='h',
-                        title="Distribuição Geral de todas as OS por Grupo de Cliente",
+                        title="Distribuição Geral de todas as OS por Cliente",
                         text='Quantidade'
                     )
                     
@@ -194,7 +192,7 @@ elif st.session_state.tela == 'graficos':
                     st.plotly_chart(fig_barras_clientes, use_container_width=True)
 
                 with graf2:
-                    st.markdown("#### Status Geral das Ordens de Serviço")
+                    
                     df_barras = df_os_final.groupby([col_status]).size().reset_index(name='Quantidade')
                     fig_barras = px.bar(df_barras, x=col_status, y='Quantidade', 
                                         title="Quantidade de OS por Status",
@@ -204,7 +202,7 @@ elif st.session_state.tela == 'graficos':
                     fig_barras.update_traces(textposition='outside')
                     st.plotly_chart(fig_barras, use_container_width=True)
             else:
-                # Modo Individual
+                # Modo Individual (Se foi selecionado apenas 1 cliente específico na lista)
                 st.markdown(f"#### Status das Ordens de Serviço — {clientes_selecionados[0]}")
                 df_barras = df_os_final.groupby([col_status]).size().reset_index(name='Quantidade')
                 fig_barras = px.bar(df_barras, x=col_status, y='Quantidade', 
@@ -220,4 +218,3 @@ elif st.session_state.tela == 'graficos':
 
     except Exception as e:
         st.error(f"Erro ao processar os gráficos: {e}")
-
