@@ -168,6 +168,7 @@ elif st.session_state.pagina == 'graficos':
                 st.markdown(f"#### Status das Ordens de Serviço — {cliente_selecionado}")
                 df_barras = df_os_final.groupby([col_status]).size().reset_index(name='Quantidade')
                 fig_barras = px.bar(df_barras, x=col_status, y='Quantidade', 
+                                    title=f"Quantidade de OS por Status para {cliente_selecionado}",
                                     labels={col_status: 'Status', 'Quantidade': 'Total de OS'},
                                     color=col_status,
                                     text='Quantidade')
