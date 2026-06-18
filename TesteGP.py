@@ -7,7 +7,7 @@ import plotly.express as px
 # ==========================================
 st.set_page_config(page_title="Dashboard Google Sheets", layout="wide")
 
-st.title("Gestão de GPs X Clientes e Ordens de Serviço (via Google Sheets)")
+st.title(":blue[Gestão de GPs X Clientes e Ordens de Serviço (via Google Sheets)]")
 
 # ==========================================
 # CONFIGURAÇÃO DOS IDs DAS PLANILHAS
@@ -158,7 +158,11 @@ try:
 
     st.write("---")
     st.write("### Listagem de Clientes do GP")
-    st.dataframe(df_clientes, use_container_width=True)
+    
+    # Seleciona apenas a primeira coluna e remove linhas completamente vazias
+    df_exibicao = df_clientes.iloc[:, [0]].dropna()
+
+    st.dataframe(df_exibicao, use_container_width=True)
 
 except Exception as e:
     st.error(f"Erro ao processar os dados: {e}")
