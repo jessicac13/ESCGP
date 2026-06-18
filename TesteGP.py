@@ -37,7 +37,7 @@ def carregar_dados_os(id_planilha):
     return df
 
 # ==========================================
-# FLUXO TELA 1: SELEÇÃO POR CLIQUE NA TABELA
+# FLUXO TELA 1: SELEÇÃO MÚLTIPLA NA TABELA
 # ==========================================
 if st.session_state.tela == 'selecao':
     gp_selecionado = st.selectbox("Selecione o Gerente de Projeto (GP):", lista_gps)
@@ -46,38 +46,46 @@ if st.session_state.tela == 'selecao':
         df_clientes = carregar_dados_gp(ID_PLANILHA_CLIENTES, gp_selecionado)
         
         st.write("---")
+        st.subheader("Selecione um ou mais clientes na tabela abaixo:")
         
-        col_btn, col_txt = st.columns([1, 3])
-        with col_btn:
-            # Botão para o caso de querer ver o consolidado geral de uma vez
-            if st.button("Ver Todos os Clientes (Geral)", use_container_width=True):
-                st.session_state.gp_atual = gp_selecionado
-                st.session_state.cliente_atual = "Todos os Clientes (Geral)"
-                st.session_state.tela = 'graficos'
-                st.rerun()
-                
-        st.subheader(f"Clique sobre o cliente desejado para abrir os gráficos:")
+        # Isola a primeira coluna e limpa linhas vazias
+        df_limpo = df_clientes.iloc[:, [0]].dropna()
+        nome_coluna_cliente = df_limpo.columns[0]
         
-        df_exibicao = df_clientes.iloc[:, [0]].dropna()
-        nome_coluna_cliente = df_exibicao.columns[0]
+        # Cria uma linha para o "Ver Todos" com a mesma estrutura de colunas
+        linha_geral = pd.DataFrame({nome_coluna_cliente: ["Todos os Clientes (Geral)"]})
+        
+        # Junta a opção geral no topo da lista de clientes cadastrados
+        df_exibicao = pd.concat([linha_geral, df_limpo], ignore_index=True)
 
-        # Tabela interativa com seleção de linhas ativa
+        # Tabela interativa com seleção múltipla ativa (multi-row)
         selecao_tabela = st.dataframe(
             df_exibicao, 
             use_container_width=True,
             on_select="rerun",
-            selection_mode="single-row"
+            selection_mode="multi-row"
         )
 
-        # Se o usuário clicou em alguma linha, captura o nome do cliente e muda de tela
+        # Processa as linhas que estão marcadas no momento
         if selecao_tabela and selecao_tabela["selection"]["rows"]:
-            linha_selecionada = selecao_tabela["selection"]["rows"][0]
-            cliente_clicado = df_exibicao.iloc[linha_selecionada, 0]
+            linhas_selecionadas = selecao_tabela["selection"]["rows"]
+            clientes_escolhidos = df_exibicao.iloc[linhas_selecionadas, 0].tolist()
             
-            st.session_state.gp_atual = gp_selecionado
-            st.session_state.cliente_atual = cliente_clicado
-            st.session_state.tela = 'graficos'
-            st.rerun()
+            st.write(f"Clientes selecionados: {', '.join(clientes_escolhidos)}")
+            
+            # Botão para confirmar o envio após marcar tudo o que quer
+            if st.button("Gerar Gráficos dos Selecionados", type="primary", use_container_width=True):
+                st.session_state.gp_atual = gp_selecionado
+                # Se "Todos os Clientes (Geral)" estiver no meio da seleção, considera visão geral completa
+                if "Todos os Clientes (Geral)" in clientes_escolhidos:
+                    st.session_state.cliente_atual = ["Todos os Clientes (Geral)"]
+                else:
+                    st.session_state.cliente_atual = clientes_escolhidos
+                
+                st.session_state.tela = 'graficos'
+                st.rerun()
+        else:
+            st.info("Selecione pelo menos uma linha na tabela acima para habilitar o botão de gráficos.")
 
     except Exception as e:
         st.error(f"Erro ao carregar dados: {e}")
@@ -87,11 +95,17 @@ if st.session_state.tela == 'selecao':
 # ==========================================
 elif st.session_state.tela == 'graficos':
     gp_selecionado = st.session_state.gp_atual
-    cliente_selecionado = st.session_state.cliente_atual
+    clientes_selecionados = st.session_state.cliente_atual
+
+    # Define o texto do cabeçalho baseado na quantidade de clientes
+    if len(clientes_selecionados) == 1:
+        texto_dashboard = clientes_selecionados[0]
+    else:
+        texto_dashboard = f"Filtro Combinado ({len(clientes_selecionados)} Clientes)"
 
     head1, head2 = st.columns([5, 1])
     with head1:
-        st.subheader(f"Dashboard: {gp_selecionado} -> {cliente_selecionado}")
+        st.subheader(f"Dashboard: {gp_selecionado} -> {texto_dashboard}")
     with head2:
         if st.button("Mudar Filtros", use_container_width=True, type="primary"):
             st.session_state.tela = 'selecao'
@@ -118,25 +132,33 @@ elif st.session_state.tela == 'graficos':
 
         df_os_filtrado_gp = df_os[df_os[col_cliente].apply(cliente_pertence_ao_gp)]
 
-        if cliente_selecionado == "Todos os Clientes (Geral)":
+        # Lógica de Filtro Final para múltiplos clientes
+        if "Todos os Clientes (Geral)" in clientes_selecionados:
             df_os_final = df_os_filtrado_gp
+            modo_geral = True
         else:
-            nome_sel_limpo = str(cliente_selecionado).strip().lower()
-            df_os_final = df_os_filtrado_gp[
-                df_os_filtrado_gp[col_cliente].astype(str).str.strip().str.lower().str.contains(nome_sel_limpo) |
-                df_os_filtrado_gp[col_cliente].astype(str).str.strip().str.lower().apply(lambda x: x in nome_sel_limpo)
-            ]
+            # Filtra todas as OS que coincidam com qualquer um dos clientes selecionados
+            mascaras = []
+            for cli in clientes_selecionados:
+                nome_sel_limpo = str(cli).strip().lower()
+                mascaras.append(
+                    df_os_filtrado_gp[col_cliente].astype(str).str.strip().str.lower().str.contains(nome_sel_limpo) |
+                    df_os_filtrado_gp[col_cliente].astype(str).str.strip().str.lower().apply(lambda x: x in nome_sel_limpo)
+                )
+            # Une as máscaras de filtros usando o operador lógico OR (|)
+            df_os_final = df_os_filtrado_gp[pd.concat(mascaras, axis=1).any(axis=1)]
+            modo_geral = len(clientes_selecionados) > 1
 
         col1, col2 = st.columns(2)
         with col1:
             st.metric(label="Total de Clientes do GP", value=len(df_clientes))
         with col2:
-            st.metric(label=f"Total de OS Relacionadas", value=len(df_os_final))
+            st.metric(label="Total de OS Relacionadas", value=len(df_os_final))
 
         st.write("---")
 
         if len(df_os_final) > 0:
-            if cliente_selecionado == "Todos os Clientes (Geral)":
+            if modo_geral:
                 df_volumetria = df_os_final.groupby(col_cliente).size().reset_index(name='Quantidade')
                 df_volumetria = df_volumetria.sort_values(by='Quantidade', ascending=False)
                 
@@ -180,10 +202,11 @@ elif st.session_state.tela == 'graficos':
                     fig_barras.update_traces(textposition='outside')
                     st.plotly_chart(fig_barras, use_container_width=True)
             else:
-                st.markdown("#### Status das Ordens de Serviço")
+                # Modo Individual (Se foi selecionado apenas 1 cliente específico na lista)
+                st.markdown(f"#### Status das Ordens de Serviço — {clientes_selecionados[0]}")
                 df_barras = df_os_final.groupby([col_status]).size().reset_index(name='Quantidade')
                 fig_barras = px.bar(df_barras, x=col_status, y='Quantidade', 
-                                    title=f"Quantidade de OS por Status para {cliente_selecionado}",
+                                    title=f"Quantidade de OS por Status para {clientes_selecionados[0]}",
                                     labels={col_status: 'Status', 'Quantidade': 'Total de OS'},
                                     color=col_status,
                                     text='Quantidade')
