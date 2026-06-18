@@ -165,7 +165,7 @@ elif st.session_state.tela == 'graficos':
                 graf1, graf2 = st.columns(2)
 
                 with graf1:
-                    st.markdown("#### Top 10 Clientes com Maior Volume de OS")
+                    
                     df_top10 = df_volumetria.head(10)
                     fig_pizza_top = px.pie(df_top10, values='Quantidade', names=col_cliente, 
                                            title="Clientes em volume de OS")
@@ -174,7 +174,7 @@ elif st.session_state.tela == 'graficos':
                     
                     st.write("---")
                     
-                    st.markdown("#### Volumetria Completa por Cliente")
+                    
                     df_barras_completo = df_volumetria.sort_values(by='Quantidade', ascending=True)
                     
                     fig_barras_clientes = px.bar(
@@ -192,7 +192,7 @@ elif st.session_state.tela == 'graficos':
                     st.plotly_chart(fig_barras_clientes, use_container_width=True)
 
                 with graf2:
-                    st.markdown("#### Status Geral das Ordens de Serviço")
+                    
                     df_barras = df_os_final.groupby([col_status]).size().reset_index(name='Quantidade')
                     fig_barras = px.bar(df_barras, x=col_status, y='Quantidade', 
                                         title="Quantidade de OS por Status",
