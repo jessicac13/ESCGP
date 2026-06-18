@@ -72,11 +72,11 @@ try:
     df_os_filtrado_gp = df_os[df_os[col_cliente].apply(cliente_pertence_ao_gp)]
 
     # Filtro 2: Seleção do Cliente (Geral vs Específico)
-    opcoes_clientes = ["Todos os Clientes (Geral)"] + sorted(list(lista_clientes_do_gp))
+    opcoes_clientes = ["Todos os Clientes "] + sorted(list(lista_clientes_do_gp))
     cliente_selecionado = st.sidebar.selectbox("Selecione o Cliente para análise de OS:", opcoes_clientes)
 
     # 4. Aplica o filtro final com base na escolha do usuário
-    if cliente_selecionado == "Todos os Clientes (Geral)":
+    if cliente_selecionado == "Todos os Clientes":
         df_os_final = df_os_filtrado_gp
     else:
         nome_sel_limpo = str(cliente_selecionado).strip().lower()
@@ -103,7 +103,7 @@ try:
     if len(df_os_final) > 0:
         
         # LÓGICA DE CONDICIONAL DOS GRÁFICOS
-        if cliente_selecionado == "Todos os Clientes (Geral)":
+        if cliente_selecionado == "Todos os Clientes":
             # Modo Geral: Mostra os dois gráficos lado a lado em colunas
             graf1, graf2 = st.columns(2)
 
