@@ -118,12 +118,11 @@ if st.session_state.tela == 'selecao':
                     title="Volume por Cargo", 
                     text='Qtd OS'
                 )
-                # Mantém os maiores cargos no topo e ajusta altura dinâmica
                 fig_cargo.update_layout(yaxis={'categoryorder':'total ascending'}, height=450)
                 st.plotly_chart(fig_cargo, use_container_width=True)
                 
         except IndexError:
-            st.error("A planilha de OS não possui 14 colunas ou mais para encontrar a coluna N (índice 13). Verifique a estrutura do arquivo.")
+            st.error("A planilha de OS não possui colunas suficientes para encontrar a coluna N (índice 13).")
             
     else:
         st.warning("Dados de OS indisponíveis para gerar o relatório de cargos.")
@@ -141,6 +140,14 @@ elif st.session_state.tela == 'graficos':
         col_cliente = 'nomecliente' if 'nomecliente' in df_os_geral.columns else df_os_geral.columns[1]
         col_status = 'status' if 'status' in df_os_geral.columns else df_os_geral.columns[7]
         
+        # Mapeia a Coluna M (índice 12) que contém o Usuário/GP responsável
+        nome_coluna_usuario = df_os_geral.columns[12]
+        termo_busca_gp = gp_selecionado.replace("_", " ").strip().lower()
+        
+        # 1. Total Geral do GP na planilha inteira (Independente do cliente)
+        df_os_usuario_gp_geral = df_os_geral[df_os_geral[nome_coluna_usuario].astype(str).str.lower().str.contains(termo_busca_gp)]
+        qtd_os_usuario_geral = len(df_os_usuario_gp_geral)
+
         lista_clientes_do_gp = df_clientes.iloc[:, 0].dropna().unique()
         lista_clientes_limpa = [str(c).strip().lower() for c in lista_clientes_do_gp]
         
@@ -164,11 +171,26 @@ elif st.session_state.tela == 'graficos':
             )
         df_os_final = df_os_filtrado_gp[pd.concat(mascaras, axis=1).any(axis=1)]
 
-        col1, col2 = st.columns(2)
+        # 2. Total do GP filtrado APENAS para os clientes selecionados no momento
+        if len(df_os_final) > 0:
+            df_os_usuario_gp_filtrado = df_os_final[df_os_final[nome_coluna_usuario].astype(str).str.lower().str.contains(termo_busca_gp)]
+            qtd_os_usuario_filtrado = len(df_os_usuario_gp_filtrado)
+        else:
+            qtd_os_usuario_filtrado = 0
+
+        # Exibição dos Indicadores (4 colunas com distinção de escopo)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric(label="Total de Clientes do GP", value=len(df_clientes))
+            st.metric(label="Clientes Selecionados", value=len(clientes_selecionados))
         with col2:
-            st.metric(label="Total de OS Relacionadas", value=len(df_os_final))
+            st.metric(label="Total de OS dos Clientes", value=len(df_os_final), 
+                      help="Quantidade total de OS que pertencem a estes clientes no sistema.")
+        with col3:
+            st.metric(label=f"OS com {gp_selecionado} (Destes Clientes)", value=qtd_os_usuario_filtrado,
+                      help="Quantidade de OS dos clientes selecionados que estão de fato com este usuário.")
+        with col4:
+            st.metric(label=f"OS com {gp_selecionado} (Total Geral)", value=qtd_os_usuario_geral,
+                      help="Volume total de OS deste usuário em toda a planilha, independente do cliente.")
 
         st.write("---")
 
