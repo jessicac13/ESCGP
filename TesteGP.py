@@ -36,23 +36,26 @@ def carregar_dados_os(id_planilha):
     df.columns = df.columns.str.strip()
     return df
 
+# Carrega a planilha de OS logo no início para o relatório central
+try:
+    df_os_geral = carregar_dados_os(ID_PLANILHA_OS)
+except Exception as e:
+    st.error(f"Erro ao carregar planilha de OS: {e}")
+    df_os_geral = pd.DataFrame()
+
 # ==========================================
-# FLUXO TELA 1: SELEÇÃO MÚLTIPLA NA TABELA
+# SIDEBAR: FILTROS NA LATERAL
 # ==========================================
-if st.session_state.tela == 'selecao':
+with st.sidebar:
+    st.header("Filtros de Escopo")
     gp_selecionado = st.selectbox("Selecione o Gerente de Projeto (GP):", lista_gps)
 
+    clientes_escolhidos = []
     try:
         df_clientes = carregar_dados_gp(ID_PLANILHA_CLIENTES, gp_selecionado)
-        
-        st.write("---")
-        st.subheader("Selecione um ou mais clientes na tabela abaixo:")
-        
-        # Isola a primeira coluna e limpa linhas vazias (Sem adicionar linha "Todos os Clientes")
         df_exibicao = df_clientes.iloc[:, [0]].dropna()
-        nome_coluna_cliente = df_exibicao.columns[0]
-
-        # Tabela interativa com seleção múltipla ativa
+        
+        st.subheader("Selecione os clientes:")
         selecao_tabela = st.dataframe(
             df_exibicao, 
             use_container_width=True,
@@ -60,52 +63,83 @@ if st.session_state.tela == 'selecao':
             selection_mode="multi-row"
         )
 
-        # Processa as linhas que estão marcadas no momento
         if selecao_tabela and selecao_tabela["selection"]["rows"]:
             linhas_selecionadas = selecao_tabela["selection"]["rows"]
             clientes_escolhidos = df_exibicao.iloc[linhas_selecionadas, 0].tolist()
-            
-            st.write(f"Clientes selecionados: {', '.join(clientes_escolhidos)}")
-            
-            # Botão para confirmar o envio após marcar o escopo desejado
-            if st.button("Gerar Gráficos dos Selecionados", type="primary", use_container_width=True):
+            st.caption(f"**Selecionados:** {', '.join(clientes_escolhidos)}")
+    except Exception as e:
+        st.error(f"Erro ao carregar clientes do GP: {e}")
+
+    st.write("---")
+    
+    # Botão de Gerar/Mudar Gráficos baseado no estado atual
+    if st.session_state.tela == 'selecao':
+        if clientes_escolhidos:
+            if st.button("Gerar Gráficos", type="primary", use_container_width=True):
                 st.session_state.gp_atual = gp_selecionado
                 st.session_state.cliente_atual = clientes_escolhidos
                 st.session_state.tela = 'graficos'
                 st.rerun()
         else:
-            st.info("Selecione pelo menos uma linha na tabela acima para habilitar o botão de gráficos.")
+            st.info("Selecione ao menos um cliente na tabela para liberar os gráficos.")
+    else:
+        if st.button("Voltar ao Relatório Geral", type="secondary", use_container_width=True):
+            st.session_state.tela = 'selecao'
+            st.rerun()
 
-    except Exception as e:
-        st.error(f"Erro ao carregar dados: {e}")
 
 # ==========================================
-# FLUXO TELA 2: EXIBIÇÃO DE TODOS OS GRÁFICOS
+# PAINEL CENTRAL: EXIBIÇÃO DINÂMICA
 # ==========================================
+
+# TELA 1: RELATÓRIO DE OS POR CARGO (Antes de clicar em gerar)
+if st.session_state.tela == 'selecao':
+    st.subheader("Relatório Geral: Quantidade de OS por Cargo")
+    
+    if not df_os_geral.empty:
+        try:
+            # Acessa a coluna 13 (Coluna N) diretamente pelo índice numérico
+            nome_coluna_cargo = df_os_geral.columns[13]
+            
+            # Agrupa e calcula a quantidade por cargo usando o nome mapeado
+            df_cargos = df_os_geral.groupby(nome_coluna_cargo).size().reset_index(name='Qtd OS')
+            df_cargos = df_cargos.sort_values(by='Qtd OS', ascending=False)
+            
+            # Exibe a tabela e o gráfico lado a lado
+            c1, c2 = st.columns([1, 2])
+            with c1:
+                st.dataframe(df_cargos, use_container_width=True, hide_index=True)
+            with c2:
+                fig_cargo = px.bar(
+                    df_cargos, 
+                    x='Qtd OS', 
+                    y=nome_coluna_cargo, 
+                    orientation='h', 
+                    title="Volume por Cargo", 
+                    text='Qtd OS'
+                )
+                # Mantém os maiores cargos no topo e ajusta altura dinâmica
+                fig_cargo.update_layout(yaxis={'categoryorder':'total ascending'}, height=450)
+                st.plotly_chart(fig_cargo, use_container_width=True)
+                
+        except IndexError:
+            st.error("A planilha de OS não possui 14 colunas ou mais para encontrar a coluna N (índice 13). Verifique a estrutura do arquivo.")
+            
+    else:
+        st.warning("Dados de OS indisponíveis para gerar o relatório de cargos.")
+
+
+# TELA 2: EXIBIÇÃO DOS GRÁFICOS DO GP/CLIENTES SELECIONADOS
 elif st.session_state.tela == 'graficos':
     gp_selecionado = st.session_state.gp_atual
     clientes_selecionados = st.session_state.cliente_atual
 
-    # Define o texto do cabeçalho baseado na quantidade de clientes selecionados
-    if len(clientes_selecionados) == 1:
-        texto_dashboard = clientes_selecionados[0]
-    else:
-        texto_dashboard = f"Filtro Combinado ({len(clientes_selecionados)} Clientes)"
-
-    head1, head2 = st.columns([5, 1])
-    with head1:
-        st.subheader(f"Dashboard: {gp_selecionado} -> {texto_dashboard}")
-    with head2:
-        if st.button("Mudar Filtros", use_container_width=True, type="primary"):
-            st.session_state.tela = 'selecao'
-            st.rerun()
+    texto_dashboard = clientes_selecionados[0] if len(clientes_selecionados) == 1 else f"Filtro Combinado ({len(clientes_selecionados)} Clientes)"
+    st.subheader(f"Dashboard: {gp_selecionado} ➔ {texto_dashboard}")
 
     try:
-        df_clientes = carregar_dados_gp(ID_PLANILHA_CLIENTES, gp_selecionado)
-        df_os = carregar_dados_os(ID_PLANILHA_OS)
-        
-        col_cliente = 'nomecliente' if 'nomecliente' in df_os.columns else df_os.columns[1]
-        col_status = 'status' if 'status' in df_os.columns else df_os.columns[7]
+        col_cliente = 'nomecliente' if 'nomecliente' in df_os_geral.columns else df_os_geral.columns[1]
+        col_status = 'status' if 'status' in df_os_geral.columns else df_os_geral.columns[7]
         
         lista_clientes_do_gp = df_clientes.iloc[:, 0].dropna().unique()
         lista_clientes_limpa = [str(c).strip().lower() for c in lista_clientes_do_gp]
@@ -119,9 +153,8 @@ elif st.session_state.tela == 'graficos':
                     return True
             return False
 
-        df_os_filtrado_gp = df_os[df_os[col_cliente].apply(cliente_pertence_ao_gp)]
+        df_os_filtrado_gp = df_os_geral[df_os_geral[col_cliente].apply(cliente_pertence_ao_gp)]
 
-        # Filtra todas as OS que coincidam com qualquer um dos clientes selecionados
         mascaras = []
         for cli in clientes_selecionados:
             nome_sel_limpo = str(cli).strip().lower()
@@ -140,50 +173,29 @@ elif st.session_state.tela == 'graficos':
         st.write("---")
 
         if len(df_os_final) > 0:
-            # Agrupa e ordena os dados para a estrutura de volumetria
             df_volumetria = df_os_final.groupby(col_cliente).size().reset_index(name='Quantidade')
             df_volumetria = df_volumetria.sort_values(by='Quantidade', ascending=False)
             
             graf1, graf2 = st.columns(2)
 
             with graf1:
-                # 1. Gráfico de Pizza (Mostra os maiores volumes do escopo selecionado)
-                
                 df_top20 = df_volumetria.head(20)
-                fig_pizza_top = px.pie(df_top20, values='Quantidade', names=col_cliente, 
-                                       title="Distribuição de volume de OS por cliente (Top 20)")
+                fig_pizza_top = px.pie(df_top20, values='Quantidade', names=col_cliente, title="Distribuição de volume de OS por cliente")
                 fig_pizza_top.update_traces(textinfo='percent+value', textposition='inside')
                 st.plotly_chart(fig_pizza_top, use_container_width=True)
                 
                 st.write("---")
                 
-                # 2. Gráfico de Barras Horizontais (Volumetria completa por cliente)
-                
                 df_barras_completo = df_volumetria.sort_values(by='Quantidade', ascending=True)
-                
-                fig_barras_clientes = px.bar(
-                    df_barras_completo, 
-                    x='Quantidade', 
-                    y=col_cliente, 
-                    orientation='h',
-                    title="Quantidade total de OS por cliente",
-                    text='Quantidade'
-                )
-                
+                fig_barras_clientes = px.bar(df_barras_completo, x='Quantidade', y=col_cliente, orientation='h', title="Quantidade total de OS por cliente", text='Quantidade')
                 altura_dinamica = max(400, len(df_barras_completo) * 25)
                 fig_barras_clientes.update_layout(height=altura_dinamica, yaxis={'type': 'category'})
                 fig_barras_clientes.update_traces(textposition='outside')
                 st.plotly_chart(fig_barras_clientes, use_container_width=True)
 
             with graf2:
-                # 3. Gráfico de Barras Verticais (Status das Ordens de Serviço do escopo selecionado)
-                
                 df_barras = df_os_final.groupby([col_status]).size().reset_index(name='Quantidade')
-                fig_barras = px.bar(df_barras, x=col_status, y='Quantidade', 
-                                    title="Quantidade de OS por Status",
-                                    labels={col_status: 'Status', 'Quantidade': 'Total de OS'},
-                                    color=col_status,
-                                    text='Quantidade')
+                fig_barras = px.bar(df_barras, x=col_status, y='Quantidade', title="Quantidade de OS por Status", color=col_status, text='Quantidade')
                 fig_barras.update_traces(textposition='outside')
                 st.plotly_chart(fig_barras, use_container_width=True)
                           
@@ -191,4 +203,4 @@ elif st.session_state.tela == 'graficos':
             st.info("Nenhuma Ordem de Serviço encontrada para as condições selecionadas.")
 
     except Exception as e:
-        st.error(f"Erro ao processar os dados: {e}")
+        st.error(f"Erro ao processar os gráficos filtrados: {e}")
