@@ -43,6 +43,12 @@ except Exception as e:
     st.error(f"Erro ao carregar planilha de OS: {e}")
     df_os_geral = pd.DataFrame()
 
+# Mapeia dinamicamente a coluna de cliente na planilha de OS
+if not df_os_geral.empty:
+    col_cliente = 'nomecliente' if 'nomecliente' in df_os_geral.columns else df_os_geral.columns[1]
+else:
+    col_cliente = None
+
 # ==========================================
 # SIDEBAR: FILTROS NA LATERAL
 # ==========================================
@@ -92,20 +98,70 @@ with st.sidebar:
 # PAINEL CENTRAL: EXIBIÇÃO DINÂMICA
 # ==========================================
 
-# TELA 1: RELATÓRIO DE OS POR CARGO (Antes de clicar em gerar)
+# TELA 1: RELATÓRIO GLOBAL (Antes de clicar em gerar)
 if st.session_state.tela == 'selecao':
-    st.subheader("Relatório Geral: Quantidade de OS por Cargo")
     
+    # --- NOVA SEÇÃO: DETECÇÃO DE CLIENTES SEM GP ---
+    st.subheader("⚠️ Clientes Sem GP Atribuído")
+    
+    if not df_os_geral.empty and col_cliente:
+        try:
+            # 1. Cria uma lista consolidada de todos os clientes que pertencem a ALGUM GP
+            todos_clientes_com_gp = set()
+            for gp in lista_gps:
+                try:
+                    df_aux = carregar_dados_gp(ID_PLANILHA_CLIENTES, gp)
+                    if not df_aux.empty:
+                        # Pega a primeira coluna de clientes de cada aba e padroniza o texto
+                        clientes_gp = df_aux.iloc[:, 0].dropna().astype(str).str.strip().str.lower().tolist()
+                        todos_clientes_com_gp.update(clientes_gp)
+                except Exception:
+                    pass # Se uma aba falhar, pula para a próxima para não travar o app
+            
+            # 2. Pega todos os clientes únicos que possuem OS registradas
+            clientes_com_os = df_os_geral[col_cliente].dropna().unique()
+            
+            # 3. Descobre quais clientes têm OS mas não estão mapeados em nenhum GP
+            clientes_orfaos_dados = []
+            for cli in clientes_com_os:
+                cli_limpo = str(cli).strip()
+                cli_lower = cli_limpo.lower()
+                
+                # Verifica se o cliente da OS NÃO bate com nenhuma parte dos cadastrados dos GPs
+                if not any(c_gp in cli_lower or cli_lower in c_gp for c_gp in todos_clientes_com_gp):
+                    # Conta quantas OS esse cliente sem GP possui no sistema
+                    qtd_os_orfa = len(df_os_geral[df_os_geral[col_cliente] == cli])
+                    clientes_orfaos_dados.append({
+                        "Cliente Sem GP": cli_limpo,
+                        "Quantidade de OS": qtd_os_orfa
+                    })
+            
+            # 4. Exibe os resultados em tela
+            if clientes_orfaos_dados:
+                df_orfaos = pd.DataFrame(clientes_orfaos_dados).sort_values(by="Quantidade de OS", ascending=False)
+                
+                # Alerta visual com a métrica
+                st.error(f"Foram encontrados {len(df_orfaos)} clientes com Ordens de Serviço ativas que não estão na carteira de nenhum GP listado.")
+                
+                # Mostra a tabela expandível para não poluir a tela se a lista for muito grande
+                with st.expander("Clique aqui para ver a lista completa de clientes sem GP", expanded=True):
+                    st.dataframe(df_orfaos, use_container_width=True, hide_index=True)
+            else:
+                st.success("Tudo certo! Todos os clientes com OS ativas estão atribuídos a pelo menos um GP.")
+                
+        except Exception as e:
+            st.warning(f"Não foi possível processar a auditoria de clientes sem GP: {e}")
+            
+    st.write("---")
+    
+    # Relatório de cargos original (movido para baixo da auditoria de clientes)
+    st.subheader("📋 Relatório Geral: Quantidade de OS por Cargo")
     if not df_os_geral.empty:
         try:
-            # Acessa a coluna 13 (Coluna N) diretamente pelo índice numérico
             nome_coluna_cargo = df_os_geral.columns[13]
-            
-            # Agrupa e calcula a quantidade por cargo usando o nome mapeado
             df_cargos = df_os_geral.groupby(nome_coluna_cargo).size().reset_index(name='Qtd OS')
             df_cargos = df_cargos.sort_values(by='Qtd OS', ascending=False)
             
-            # Exibe a tabela e o gráfico lado a lado
             c1, c2 = st.columns([1, 2])
             with c1:
                 st.dataframe(df_cargos, use_container_width=True, hide_index=True)
@@ -123,9 +179,6 @@ if st.session_state.tela == 'selecao':
                 
         except IndexError:
             st.error("A planilha de OS não possui colunas suficientes para encontrar a coluna N (índice 13).")
-            
-    else:
-        st.warning("Dados de OS indisponíveis para gerar o relatório de cargos.")
 
 
 # TELA 2: EXIBIÇÃO DOS GRÁFICOS DO GP/CLIENTES SELECIONADOS
@@ -134,18 +187,17 @@ elif st.session_state.tela == 'graficos':
     clientes_selecionados = st.session_state.cliente_atual
 
     texto_dashboard = clientes_selecionados[0] if len(clientes_selecionados) == 1 else f"Filtro Combinado ({len(clientes_selecionados)} Clientes)"
-    st.subheader(f"Dashboard: {gp_selecionado} ➔ {texto_dashboard}")
+    st.subheader(f"📊 Dashboard: {gp_selecionado} ➔ {texto_dashboard}")
 
     try:
-        col_cliente = 'nomecliente' if 'nomecliente' in df_os_geral.columns else df_os_geral.columns[1]
         col_status = 'status' if 'status' in df_os_geral.columns else df_os_geral.columns[7]
-        
-        # Mapeia a Coluna M (índice 12) que contém o Usuário/GP responsável
         nome_coluna_usuario = df_os_geral.columns[12]
-        termo_busca_gp = gp_selecionado.replace("_", " ").strip().lower()
         
-        # 1. Total Geral do GP na planilha inteira (Independente do cliente)
-        df_os_usuario_gp_geral = df_os_geral[df_os_geral[nome_coluna_usuario].astype(str).str.lower().str.contains(termo_busca_gp)]
+        primeiro_nome_gp = gp_selecionado.split('_')[0].strip().lower()
+        
+        df_os_usuario_gp_geral = df_os_geral[
+            df_os_geral[nome_coluna_usuario].astype(str).str.lower().str.contains(primeiro_nome_gp, na=False)
+        ]
         qtd_os_usuario_geral = len(df_os_usuario_gp_geral)
 
         lista_clientes_do_gp = df_clientes.iloc[:, 0].dropna().unique()
@@ -171,14 +223,14 @@ elif st.session_state.tela == 'graficos':
             )
         df_os_final = df_os_filtrado_gp[pd.concat(mascaras, axis=1).any(axis=1)]
 
-        # 2. Total do GP filtrado APENAS para os clientes selecionados no momento
         if len(df_os_final) > 0:
-            df_os_usuario_gp_filtrado = df_os_final[df_os_final[nome_coluna_usuario].astype(str).str.lower().str.contains(termo_busca_gp)]
+            df_os_usuario_gp_filtrado = df_os_final[
+                df_os_final[nome_coluna_usuario].astype(str).str.lower().str.contains(primeiro_nome_gp, na=False)
+            ]
             qtd_os_usuario_filtrado = len(df_os_usuario_gp_filtrado)
         else:
             qtd_os_usuario_filtrado = 0
 
-        # Exibição dos Indicadores (4 colunas com distinção de escopo)
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric(label="Clientes Selecionados", value=len(clientes_selecionados))
@@ -187,10 +239,10 @@ elif st.session_state.tela == 'graficos':
                       help="Quantidade total de OS que pertencem a estes clientes no sistema.")
         with col3:
             st.metric(label=f"OS com {gp_selecionado} (Destes Clientes)", value=qtd_os_usuario_filtrado,
-                      help="Quantidade de OS dos clientes selecionados que estão de fato com este usuário.")
+                      help="Quantidade de OS dos clientes selecionados que estão de fato atribuídas a este usuário (busca por primeiro nome).")
         with col4:
             st.metric(label=f"OS com {gp_selecionado} (Total Geral)", value=qtd_os_usuario_geral,
-                      help="Volume total de OS deste usuário em toda a planilha, independente do cliente.")
+                      help="Volume total de OS deste usuário em toda a planilha, independente do cliente (busca por primeiro nome).")
 
         st.write("---")
 
