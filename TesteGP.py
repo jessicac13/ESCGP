@@ -48,17 +48,11 @@ if st.session_state.tela == 'selecao':
         st.write("---")
         st.subheader("Selecione um ou mais clientes na tabela abaixo:")
         
-        # Isola a primeira coluna e limpa linhas vazias
-        df_limpo = df_clientes.iloc[:, [0]].dropna()
-        nome_coluna_cliente = df_limpo.columns[0]
-        
-        # Cria uma linha para o "Ver Todos" com a mesma estrutura de colunas
-        linha_geral = pd.DataFrame({nome_coluna_cliente: ["Todos os Clientes (Geral)"]})
-        
-        # Junta a opção geral no topo da lista de clientes cadastrados
-        df_exibicao = pd.concat([linha_geral, df_limpo], ignore_index=True)
+        # Isola a primeira coluna e limpa linhas vazias (Sem adicionar linha "Todos os Clientes")
+        df_exibicao = df_clientes.iloc[:, [0]].dropna()
+        nome_coluna_cliente = df_exibicao.columns[0]
 
-        # Tabela interativa com seleção múltipla ativa (multi-row)
+        # Tabela interativa com seleção múltipla ativa
         selecao_tabela = st.dataframe(
             df_exibicao, 
             use_container_width=True,
@@ -73,15 +67,10 @@ if st.session_state.tela == 'selecao':
             
             st.write(f"Clientes selecionados: {', '.join(clientes_escolhidos)}")
             
-            # Botão para confirmar o envio após marcar tudo o que quer
+            # Botão para confirmar o envio após marcar o escopo desejado
             if st.button("Gerar Gráficos dos Selecionados", type="primary", use_container_width=True):
                 st.session_state.gp_atual = gp_selecionado
-                # Se "Todos os Clientes (Geral)" estiver no meio da seleção, considera visão geral completa
-                if "Todos os Clientes (Geral)" in clientes_escolhidos:
-                    st.session_state.cliente_atual = ["Todos os Clientes (Geral)"]
-                else:
-                    st.session_state.cliente_atual = clientes_escolhidos
-                
+                st.session_state.cliente_atual = clientes_escolhidos
                 st.session_state.tela = 'graficos'
                 st.rerun()
         else:
@@ -91,13 +80,13 @@ if st.session_state.tela == 'selecao':
         st.error(f"Erro ao carregar dados: {e}")
 
 # ==========================================
-# FLUXO TELA 2: EXIBIÇÃO APENAS DOS GRÁFICOS
+# FLUXO TELA 2: EXIBIÇÃO DE TODOS OS GRÁFICOS
 # ==========================================
 elif st.session_state.tela == 'graficos':
     gp_selecionado = st.session_state.gp_atual
     clientes_selecionados = st.session_state.cliente_atual
 
-    # Define o texto do cabeçalho baseado na quantidade de clientes
+    # Define o texto do cabeçalho baseado na quantidade de clientes selecionados
     if len(clientes_selecionados) == 1:
         texto_dashboard = clientes_selecionados[0]
     else:
@@ -132,22 +121,15 @@ elif st.session_state.tela == 'graficos':
 
         df_os_filtrado_gp = df_os[df_os[col_cliente].apply(cliente_pertence_ao_gp)]
 
-        # Lógica de Filtro Final para múltiplos clientes
-        if "Todos os Clientes (Geral)" in clientes_selecionados:
-            df_os_final = df_os_filtrado_gp
-            modo_geral = True
-        else:
-            # Filtra todas as OS que coincidam com qualquer um dos clientes selecionados
-            mascaras = []
-            for cli in clientes_selecionados:
-                nome_sel_limpo = str(cli).strip().lower()
-                mascaras.append(
-                    df_os_filtrado_gp[col_cliente].astype(str).str.strip().str.lower().str.contains(nome_sel_limpo) |
-                    df_os_filtrado_gp[col_cliente].astype(str).str.strip().str.lower().apply(lambda x: x in nome_sel_limpo)
-                )
-            # Une as máscaras de filtros usando o operador lógico OR (|)
-            df_os_final = df_os_filtrado_gp[pd.concat(mascaras, axis=1).any(axis=1)]
-            modo_geral = len(clientes_selecionados) > 1
+        # Filtra todas as OS que coincidam com qualquer um dos clientes selecionados
+        mascaras = []
+        for cli in clientes_selecionados:
+            nome_sel_limpo = str(cli).strip().lower()
+            mascaras.append(
+                df_os_filtrado_gp[col_cliente].astype(str).str.strip().str.lower().str.contains(nome_sel_limpo) |
+                df_os_filtrado_gp[col_cliente].astype(str).str.strip().str.lower().apply(lambda x: x in nome_sel_limpo)
+            )
+        df_os_final = df_os_filtrado_gp[pd.concat(mascaras, axis=1).any(axis=1)]
 
         col1, col2 = st.columns(2)
         with col1:
@@ -158,55 +140,47 @@ elif st.session_state.tela == 'graficos':
         st.write("---")
 
         if len(df_os_final) > 0:
-            if modo_geral:
-                df_volumetria = df_os_final.groupby(col_cliente).size().reset_index(name='Quantidade')
-                df_volumetria = df_volumetria.sort_values(by='Quantidade', ascending=False)
+            # Agrupa e ordena os dados para a estrutura de volumetria
+            df_volumetria = df_os_final.groupby(col_cliente).size().reset_index(name='Quantidade')
+            df_volumetria = df_volumetria.sort_values(by='Quantidade', ascending=False)
+            
+            graf1, graf2 = st.columns(2)
+
+            with graf1:
+                # 1. Gráfico de Pizza (Mostra os maiores volumes do escopo selecionado)
                 
-                graf1, graf2 = st.columns(2)
+                df_top20 = df_volumetria.head(20)
+                fig_pizza_top = px.pie(df_top20, values='Quantidade', names=col_cliente, 
+                                       title="Distribuição de volume de OS por cliente (Top 20)")
+                fig_pizza_top.update_traces(textinfo='percent+value', textposition='inside')
+                st.plotly_chart(fig_pizza_top, use_container_width=True)
+                
+                st.write("---")
+                
+                # 2. Gráfico de Barras Horizontais (Volumetria completa por cliente)
+                
+                df_barras_completo = df_volumetria.sort_values(by='Quantidade', ascending=True)
+                
+                fig_barras_clientes = px.bar(
+                    df_barras_completo, 
+                    x='Quantidade', 
+                    y=col_cliente, 
+                    orientation='h',
+                    title="Quantidade total de OS por cliente",
+                    text='Quantidade'
+                )
+                
+                altura_dinamica = max(400, len(df_barras_completo) * 25)
+                fig_barras_clientes.update_layout(height=altura_dinamica, yaxis={'type': 'category'})
+                fig_barras_clientes.update_traces(textposition='outside')
+                st.plotly_chart(fig_barras_clientes, use_container_width=True)
 
-                with graf1:
-                    
-                    df_top10 = df_volumetria.head(10)
-                    fig_pizza_top = px.pie(df_top10, values='Quantidade', names=col_cliente, 
-                                           title="Clientes em volume de OS")
-                    fig_pizza_top.update_traces(textinfo='percent+value', textposition='inside')
-                    st.plotly_chart(fig_pizza_top, use_container_width=True)
-                    
-                    st.write("---")
-                    
-                    
-                    df_barras_completo = df_volumetria.sort_values(by='Quantidade', ascending=True)
-                    
-                    fig_barras_clientes = px.bar(
-                        df_barras_completo, 
-                        x='Quantidade', 
-                        y=col_cliente, 
-                        orientation='h',
-                        title="Distribuição Geral de todas as OS por Cliente",
-                        text='Quantidade'
-                    )
-                    
-                    altura_dinamica = max(400, len(df_barras_completo) * 25)
-                    fig_barras_clientes.update_layout(height=altura_dinamica, yaxis={'type': 'category'})
-                    fig_barras_clientes.update_traces(textposition='outside')
-                    st.plotly_chart(fig_barras_clientes, use_container_width=True)
-
-                with graf2:
-                    
-                    df_barras = df_os_final.groupby([col_status]).size().reset_index(name='Quantidade')
-                    fig_barras = px.bar(df_barras, x=col_status, y='Quantidade', 
-                                        title="Quantidade de OS por Status",
-                                        labels={col_status: 'Status', 'Quantidade': 'Total de OS'},
-                                        color=col_status,
-                                        text='Quantidade')
-                    fig_barras.update_traces(textposition='outside')
-                    st.plotly_chart(fig_barras, use_container_width=True)
-            else:
-                # Modo Individual (Se foi selecionado apenas 1 cliente específico na lista)
-                st.markdown(f"#### Status das Ordens de Serviço — {clientes_selecionados[0]}")
+            with graf2:
+                # 3. Gráfico de Barras Verticais (Status das Ordens de Serviço do escopo selecionado)
+                
                 df_barras = df_os_final.groupby([col_status]).size().reset_index(name='Quantidade')
                 fig_barras = px.bar(df_barras, x=col_status, y='Quantidade', 
-                                    title=f"Quantidade de OS por Status para {clientes_selecionados[0]}",
+                                    title="Quantidade de OS por Status",
                                     labels={col_status: 'Status', 'Quantidade': 'Total de OS'},
                                     color=col_status,
                                     text='Quantidade')
@@ -217,4 +191,4 @@ elif st.session_state.tela == 'graficos':
             st.info("Nenhuma Ordem de Serviço encontrada para as condições selecionadas.")
 
     except Exception as e:
-        st.error(f"Erro ao processar os gráficos: {e}")
+        st.error(f"Erro ao processar os dados: {e}")
