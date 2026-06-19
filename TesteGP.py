@@ -155,7 +155,7 @@ if st.session_state.tela == 'selecao':
     st.write("---")
     
     # Relatório de cargos original (movido para baixo da auditoria de clientes)
-    st.subheader("📋 Relatório Geral: Quantidade de OS por Cargo")
+    st.subheader("Relatório Geral: Quantidade de OS por Cargo")
     if not df_os_geral.empty:
         try:
             nome_coluna_cargo = df_os_geral.columns[13]
@@ -187,7 +187,7 @@ elif st.session_state.tela == 'graficos':
     clientes_selecionados = st.session_state.cliente_atual
 
     texto_dashboard = clientes_selecionados[0] if len(clientes_selecionados) == 1 else f"Filtro Combinado ({len(clientes_selecionados)} Clientes)"
-    st.subheader(f"📊 Dashboard: {gp_selecionado} ➔ {texto_dashboard}")
+    st.subheader(f"Dashboard: {gp_selecionado} ➔ {texto_dashboard}")
 
     try:
         col_status = 'status' if 'status' in df_os_geral.columns else df_os_geral.columns[7]
