@@ -46,8 +46,11 @@ except Exception as e:
 # Mapeia dinamicamente a coluna de cliente na planilha de OS
 if not df_os_geral.empty:
     col_cliente = 'nomecliente' if 'nomecliente' in df_os_geral.columns else df_os_geral.columns[1]
+    # Mapeia a coluna C (Índice 2) para o Grupo de Clientes
+    col_grupo_cliente = df_os_geral.columns[2] if len(df_os_geral.columns) > 2 else None
 else:
     col_cliente = None
+    col_grupo_cliente = None
 
 # ==========================================
 # SIDEBAR: FILTROS NA LATERAL
@@ -151,6 +154,30 @@ if st.session_state.tela == 'selecao':
                 
         except Exception as e:
             st.warning(f"Não foi possível processar a auditoria de clientes sem GP: {e}")
+            
+    st.write("---")
+    
+    # --- NOVA SEÇÃO VISUAL: DISTRIBUIÇÃO GLOBAL POR GRUPO DE CLIENTE ---
+    if not df_os_geral.empty and col_grupo_cliente:
+        st.subheader("Relatório Geral: Distribuição por Grupo de Cliente")
+        try:
+            df_grupos = df_os_geral.groupby(col_grupo_cliente).size().reset_index(name='Qtd OS')
+            df_grupos = df_grupos.sort_values(by='Qtd OS', ascending=False)
+            
+            c1_g, c2_g = st.columns([1, 2])
+            with c1_g:
+                st.dataframe(df_grupos, use_container_width=True, hide_index=True)
+            with c2_g:
+                fig_pizza_grupo = px.pie(
+                    df_grupos, 
+                    values='Qtd OS', 
+                    names=col_grupo_cliente, 
+                    title="Porcentagem de OS por Grupo de Cliente (Coluna C)"
+                )
+                fig_pizza_grupo.update_traces(textinfo='percent+value', textposition='inside')
+                st.plotly_chart(fig_pizza_grupo, use_container_width=True)
+        except Exception as e:
+            st.error(f"Erro ao gerar gráfico de Grupos de Cliente: {e}")
             
     st.write("---")
     
@@ -340,8 +367,6 @@ elif st.session_state.tela == 'graficos':
             fig_gantt.update_xaxes(showticklabels=False, title="Fluxo Contínuo de Entrega")
             
             st.plotly_chart(fig_gantt, use_container_width=True)
-            
-            
 
     except Exception as e:
         st.error(f"Erro ao processar os gráficos filtrados: {e}")
