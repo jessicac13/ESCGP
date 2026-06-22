@@ -172,7 +172,7 @@ if st.session_state.tela == 'selecao':
                     df_grupos, 
                     values='Qtd OS', 
                     names=col_grupo_cliente, 
-                    title="Porcentagem de OS por Grupo de Cliente (Coluna C)"
+                    title="Porcentagem de OS por Grupo de Cliente"
                 )
                 fig_pizza_grupo.update_traces(textinfo='percent+value', textposition='inside')
                 st.plotly_chart(fig_pizza_grupo, use_container_width=True)
